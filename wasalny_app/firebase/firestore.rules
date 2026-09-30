@@ -1,0 +1,97 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'am4303576@gmail.com' ||
+        getUserData().role == 'admin'
+      );
+    }
+
+    function isManager(restaurantId) {
+      return isAuthenticated() && (
+        isAdmin() ||
+        (getUserData().role == 'manager' && getUserData().restaurantId == restaurantId)
+      );
+    }
+
+    // --- Users Collection ---
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // --- Restaurants Collection ---
+    match /restaurants/{restaurantId} {
+      allow read: if true; // Public for customer browsing
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || isManager(restaurantId);
+    }
+
+    // --- Categories & Products Collections ---
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin() || isManager(request.resource.data.restaurantId);
+    }
+
+    match /products/{productId} {
+      allow read: if true;
+      allow write: if isAdmin() || isManager(request.resource.data.restaurantId);
+    }
+
+    // --- Orders Collection (Strict production lifecycle rules) ---
+    match /orders/{orderId} {
+      // Customers read their own orders, restaurants read their restaurant's orders, Admin reads all
+      allow read: if isAuthenticated() && (
+        isAdmin() ||
+        resource.data.customerId == request.auth.uid ||
+        (getUserData().restaurantId != null && resource.data.restaurantId == getUserData().restaurantId) ||
+        getUserData().role == 'captain'
+      );
+
+      // Customer creates order initially with 'sent' status
+      allow create: if isAuthenticated() && request.resource.data.status == 'sent';
+
+      // Updates restricted by role:
+      allow update: if isAuthenticated() && (
+        isAdmin() ||
+        // Customer can ONLY cancel if previous state was 'sent'
+        (resource.data.customerId == request.auth.uid &&
+         resource.data.status == 'sent' &&
+         request.resource.data.status == 'cancelled') ||
+        // Manager can update status to 'received' or 'preparing'
+        (isManager(resource.data.restaurantId) &&
+         request.resource.data.status in ['received', 'preparing']) ||
+        // Captain can update status to 'picked_up' or 'delivered'
+        (getUserData().role == 'captain' &&
+         request.resource.data.status in ['picked_up', 'delivered'])
+      );
+    }
+
+    // --- Coupons & Banners ---
+    match /coupons/{couponId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /banners/{bannerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // --- OTP Requests ---
+    match /otp_requests/{email} {
+      allow read, write: if true;
+    }
+  }
+}
