@@ -23,9 +23,14 @@ jobs:
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.0'
           channel: 'stable'
           cache: true
+
+      - name: Prepare Project Folders
+        working-directory: wasalny_app
+        run: |
+          mkdir -p assets/sounds
+          mkdir -p assets/images
 
       - name: Install Dependencies
         working-directory: wasalny_app
@@ -33,7 +38,7 @@ jobs:
 
       - name: Build Release APK
         working-directory: wasalny_app
-        run: flutter build apk --release
+        run: flutter build apk --release --no-tree-shake-icons
 
       - name: Upload Release APK Artifact
         uses: actions/upload-artifact@v4
