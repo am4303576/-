@@ -26,11 +26,12 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Prepare Project Folders
+      - name: Repair and Prepare Project
         working-directory: wasalny_app
         run: |
           mkdir -p assets/sounds
           mkdir -p assets/images
+          flutter create . --platforms=android --org=com.wasalny
 
       - name: Install Dependencies
         working-directory: wasalny_app
